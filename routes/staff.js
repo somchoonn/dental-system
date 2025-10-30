@@ -1,24 +1,17 @@
 // routes/staff.js (MySQL version)
 const express = require('express');
 const router = express.Router();
-const db = require('../db'); // mysql2/promise (เหมือน auth.js)
-const { allowRoles } = require('../utils/auth'); // ← สำคัญ: ต้องมี!
-
-/* ========== Helper ========== */
-
-// ใช้ชื่อ table ยูนิตแบบตายตัว (ถ้าโปรเจกต์คุณใช้ 'units' ให้เปลี่ยนที่นี่จุดเดียว)
+const db = require('../db');
+const { allowRoles } = require('../utils/auth');
 const UNIT_TABLE = 'dental_units';
 
-// แปลงค่าพารามิเตอร์ page/pageSize ให้ปลอดภัย
 function toInt(v, def, min = 1, max = 1000) {
   const n = parseInt(v, 10);
   if (Number.isNaN(n)) return def;
   return Math.min(Math.max(n, min), max);
 }
 
-/* =========================================
- * 🔹 Patients List + Pagination (MySQL)
- * ========================================= */
+// Get Patients List
 router.get('/patients', allowRoles('staff'), async (req, res, next) => {
   try {
     const searchQuery = req.query.search || '';
@@ -79,9 +72,7 @@ router.get('/patients', allowRoles('staff'), async (req, res, next) => {
   }
 });
 
-/* ===============================
- * 🔹 Edit Patient (MySQL)
- * =============================== */
+// Edit Patient Info
 router.get('/patients/:id/edit', allowRoles('staff'), async (req, res, next) => {
   try {
     const patientId = req.params.id;
@@ -125,9 +116,7 @@ router.post('/patients/:id/edit', allowRoles('staff'), async (req, res, next) =>
   }
 });
 
-/* ===============================
- * 🔹 Payments (MySQL)
- * =============================== */
+// Get Payments List
 router.get('/payments', allowRoles('staff'), async (req, res, next) => {
   try {
     const page = toInt(req.query.page, 1, 1, 100000);
@@ -261,9 +250,7 @@ router.post('/payments/:id/complete', allowRoles('staff'), async (req, res, next
   }
 });
 
-/* ===============================
- * 🔹 Unit Page
- * =============================== */
+// Unit Page
 router.get('/unit', allowRoles('staff'), (req, res) => {
   res.render('staff/unit', {
     user: req.user,
@@ -272,9 +259,7 @@ router.get('/unit', allowRoles('staff'), (req, res) => {
   });
 });
 
-/* ===============================
- * 🔹 Queue Page
- * =============================== */
+// Queue Page
 router.get('/queue', allowRoles('staff'), (req, res) => {
   res.render('staff/queue', {
     user: req.user,
@@ -283,9 +268,7 @@ router.get('/queue', allowRoles('staff'), (req, res) => {
   });
 });
 
-/* ===============================
- * 🔹 Queue Master Data (MySQL)
- * =============================== */
+
 router.get('/queue-master-data', allowRoles('staff'), async (req, res) => {
   try {
     const [dentists] = await db.query(
@@ -314,9 +297,7 @@ router.get('/queue-master-data', allowRoles('staff'), async (req, res) => {
   }
 });
 
-/* ===============================
- * 🔹 Queue Data - requests/appointments/availability
- * =============================== */
+// Queue Data
 router.get('/queue-data', allowRoles('staff'), async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'Date is required' });
@@ -470,17 +451,13 @@ router.get('/dentist-unit-assignment', allowRoles('staff'), async (req, res) => 
   }
 });
 
-/* ===============================
- * 🔹 Assign Queue (Transaction, MySQL)
- * =============================== */
+// Assign Queue
 router.post('/assign-queue', allowRoles('staff'), async (req, res) => {
   const { requestId, patientId, dentistId, unitId, date, slot, serviceDescription } = req.body;
   if (!requestId || !patientId || !dentistId || !unitId || !date || !slot) {
     return res.status(400).json({ error: 'ข้อมูลไม่ครบถ้วน' });
   }
 
-  // คำนวณเวลาเริ่ม/สิ้นสุดจาก slot รูปแบบ "HH:MM-HH:MM" (คุณส่งมาเป็น "09-10" ก็ปรับ parser ตามจริง)
-  // ที่นี่สมมติว่า slot = "09:00-10:00"
   const [startStr, endStr] = slot.split('-');
   const startTime = `${date} ${startStr}:00`.replace(':00:00', ':00'); // เผื่อส่งมาเป็น "09-10" ให้แก้ parser
   const endTime = `${date} ${endStr}:00`.replace(':00:00', ':00');
@@ -581,9 +558,7 @@ router.post('/assign-queue', allowRoles('staff'), async (req, res) => {
   }
 });
 
-/* ===============================
- * 🔹 Debug Data
- * =============================== */
+// Debug Data
 router.get('/debug-data', allowRoles('staff'), async (req, res) => {
   try {
     const [dentists]  = await db.query('SELECT id, pre_name, first_name, last_name FROM dentists LIMIT 10');
@@ -604,9 +579,7 @@ router.get('/debug-data', allowRoles('staff'), async (req, res) => {
   }
 });
 
-/* ===============================
- * 🔹 Unit API (MySQL)
- * =============================== */
+// Unit Management APIs
 router.get('/api/units', allowRoles('staff'), async (req, res) => {
   try {
     const [rows] = await db.query(`SELECT id, unit_name, status FROM ${UNIT_TABLE} ORDER BY id`);
@@ -668,9 +641,7 @@ router.delete('/api/units/:id', allowRoles('staff'), async (req, res) => {
   }
 });
 
-/* ===============================
- * 🔹 Dentist Schedule Management
- * =============================== */
+// Schedules Page
 router.get('/schedules', allowRoles('staff'), (req, res) => {
   res.render('staff/schedules', {
     user: req.user,

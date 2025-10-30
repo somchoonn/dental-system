@@ -12,46 +12,46 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 80;
 
-// โหลด connection pool (MySQL RDS)
-const db = require('./db'); // <-- ใช้ mysql2/promise
+
+const db = require('./db');
 
 // --- Setup --- 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// --- Middlewares ---
 
-// Nonce for CSP
+
 app.use((req, res, next) => {
   res.locals.nonce = crypto.randomBytes(16).toString('base64');
   next();
 });
 
 // Security
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: [
-        "'self'",
-        (req, res) => `'nonce-${res.locals.nonce}'`,
-        "https://code.jquery.com",
-        "https://cdn.jsdelivr.net",
-        "https://stackpath.bootstrapcdn.com"
-      ],
-      scriptSrcAttr: ["'unsafe-inline'"],
-      styleSrc: [
-        "'self'",
-        "https://stackpath.bootstrapcdn.com",
-        "https://cdnjs.cloudflare.com",
-        "'unsafe-inline'"
-      ],
-      fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
-      imgSrc: ["'self'", "data:", "http://localhost:3000"],
-      connectSrc: ["'self'", "https://stackpath.bootstrapcdn.com", "https://cdn.jsdelivr.net"]
-    },
-  },
-}));
+// app.use(helmet({
+//   contentSecurityPolicy: {
+//     directives: {
+//       defaultSrc: ["'self'"],
+//       scriptSrc: [
+//         "'self'",
+//         (req, res) => `'nonce-${res.locals.nonce}'`,
+//         "https://code.jquery.com",
+//         "https://cdn.jsdelivr.net",
+//         "https://stackpath.bootstrapcdn.com"
+//       ],
+//       scriptSrcAttr: ["'unsafe-inline'"],
+//       styleSrc: [
+//         "'self'",
+//         "https://stackpath.bootstrapcdn.com",
+//         "https://cdnjs.cloudflare.com",
+//         "'unsafe-inline'"
+//       ],
+//       fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
+//       imgSrc: ["'self'", "data:", "http://localhost:3000"],
+//       connectSrc: ["'self'", "https://stackpath.bootstrapcdn.com", "https://cdn.jsdelivr.net"]
+//     },
+//   },
+// }));
+
 app.use(compression());
 
 // Static assets (must be before authentication)

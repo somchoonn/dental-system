@@ -150,6 +150,8 @@ router.get('/patients/:id/history', allowRoles('dentist'), async (req, res, next
       SELECT 
         v.id,
         v.visit_date,
+        v.doctor_name,
+        v.vital_signs,
         v.procedure_list,
         v.notes,
         v.status,
@@ -165,7 +167,7 @@ router.get('/patients/:id/history', allowRoles('dentist'), async (req, res, next
       [patientId]
     );
 
-    // 🔹 Render หน้า EJS
+    // 🔹Render หน้า EJS
     res.render('dentists/history', {
       patient,
       visits,

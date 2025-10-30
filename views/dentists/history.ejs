@@ -74,7 +74,7 @@
               <% visits.forEach((visit, index) => { 
                 const doctorName = visit.doctor_name || 'N/A';
                 const clinicalNotes = visit.clinical_notes || '';
-                const proceduresSummary = visit.procedures_summary || '-';
+                const proceduresSummary = visit.procedure_list[0].description || '-';
                 const searchText = (doctorName + ' ' + clinicalNotes + ' ' + proceduresSummary).toLowerCase();
               %> 
                 <a href="#" class="visit-item <%= index === 0 ? 'active' : '' %>" 
@@ -146,15 +146,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ✅ ใช้ field ตาม RDS: procedure_list, notes, status, payment_amount, payment_status
     let contentHtml = `
-      <div class="detail-section"><h5>หัตถการ</h5><p>${visit.procedure_list || 'ไม่มีข้อมูล'}</p></div>
-      <div class="detail-section"><h5>บันทึก/หมายเหตุ</h5><p>${visit.notes || 'ไม่มีบันทึก'}</p></div>
-      <div class="detail-section"><h5>สถานะการรักษา</h5>
-        <span class="badge ${
-          visit.status === 'done' ? 'badge-success' :
-          visit.status === 'cancelled' ? 'badge-danger' :
-          'badge-warning'
-        }">${visit.status || 'ไม่ระบุ'}</span>
-      </div>
+      <div class="detail-section"><h5>หัตถการ</h5><p>${visit.procedure_list[0].description || 'ไม่มีข้อมูล'}</p></div>
+      <div class="detail-section"><h5>Vital Signs</h5>
+        <p>BP SYS: ${visit.vital_signs.bp_sys} | BP DIA: ${visit.vital_signs.bp_dia} | PULSE : ${visit.vital_signs.pulse_rate}</p>
+      <div class="detail-section"><h5>บันทึก / ข้อสังเกต </h5>
+         <p>${visit.notes || 'ไม่มีบันทึก'}</p></div>
+        <div class="detail-section"><h5>X-RAYS</h5>
     `;
 
     // ✅ ส่วนการชำระเงิน
