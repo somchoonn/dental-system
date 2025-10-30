@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>สมัครสมาชิก | Dentalcare Clinic</title>
+    <link rel="stylesheet" href="/public/css/styles.css" />
+    <style>
+        .relative { position: relative; }
+        .alert { color: #fff; background: #dc3545; padding: 10px; border-radius: 6px; margin-bottom: 12px; }
+        .grid-2 { display: grid; gap: 14px; }
+        @media(min-width:900px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+        .actions { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 16px; }
+        .grid-3 { display: grid; gap: 14px; }
+        @media(min-width:900px) { .grid-3 { grid-template-columns: repeat(3, 1fr); } }
+    </style>
+</head>
+
+<body>
+    <main>
+        <section class="wrap">
+            <div class="brand">
+                <div class="logo"><img src="/public/css/logo.png" alt="Dentalcare Logo"></div>
+                <div>
+                    <h1>สมัครสมาชิก</h1>
+                    <p class="sub">ระบบจัดการคลินิกทันตกรรม</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <% if (typeof message !== 'undefined' && message) { %>
+                    <div class="alert"><%= message %></div>
+                <% } %>
+
+                <form method="POST" action="/register">
+                    <input type="hidden" name="from" value="<%= from %>">
+                    <div class="grid-3">
+                        <div>
+                            <label for="pre_name">คำนำหน้าชื่อ</label>
+                            <select id="pre_name" name="pre_name" required>
+                                <option value="">เลือก</option>
+                                <option>นาย</option>
+                                <option>นาง</option>
+                                <option>นางสาว</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="first_name">ชื่อ</label>
+                            <input type="text" id="first_name" name="first_name" required placeholder="ชื่อจริง">
+                        </div>
+                        <div>
+                            <label for="last_name">นามสกุล</label>
+                            <input type="text" id="last_name" name="last_name" required placeholder="นามสกุล">
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div>
+                            <label for="gender">เพศ</label>
+                            <select id="gender" name="gender" required>
+                                <option value="">เลือก</option>
+                                <option>ชาย</option>
+                                <option>หญิง</option>
+                                <option>อื่น ๆ</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="birth_date">วันเกิด</label>
+                            <input type="date" id="birth_date" name="birth_date" required>
+                        </div>
+                    </div>
+
+                    <div class="grid-3">
+                        <div>
+                            <label for="race">เชื้อชาติ</label>
+                            <input type="text" id="race" name="race" placeholder="เช่น ไทย" required>
+                        </div>
+                        <div>
+                            <label for="nationality">สัญชาติ</label>
+                            <input type="text" id="nationality" name="nationality" placeholder="เช่น ไทย" required>
+                        </div>
+                        <div>
+                            <label for="religion">ศาสนา</label>
+                            <input type="text" id="religion" name="religion" placeholder="เช่น พุทธ" required>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label for="phone">เบอร์โทรศัพท์</label>
+                        <input type="tel" id="phone" name="phone" placeholder="080xxxxxxx" maxlength="10" inputmode="tel" required>
+                    </div>
+
+                    <div>
+                        <label for="email">อีเมล</label>
+                        <input type="email" id="email" name="email" placeholder="name@example.com">
+                    </div>
+
+                    <div>
+                        <label for="address">ที่อยู่</label>
+                        <textarea id="address" name="address" rows="2" placeholder="ที่อยู่ปัจจุบัน"></textarea>
+                    </div>
+
+                    <div>
+                        <label for="drug_allergy">ประวัติแพ้ยา</label>
+                        <textarea id="drug_allergy" name="drug_allergy" rows="2" placeholder="ถ้าไม่มีให้เว้นว่าง"></textarea>
+                    </div>
+
+                    <hr style="margin: 20px 0; border: 1px solid #eee;">
+
+                    <div>
+                        <label for="citizen_id">รหัสบัตรประชาชน (ใช้เป็น Username)</label>
+                        <input type="text" id="citizen_id" name="citizen_id" required placeholder="กรอก 13 หลัก" maxlength="13" inputmode="numeric">
+                    </div>
+
+                    <div class="grid-2">
+                        <div>
+                            <label for="password">รหัสผ่าน</label>
+                            <input type="password" id="password" name="password" required placeholder="อย่างน้อย 8 ตัวอักษร">
+                        </div>
+                        <div>
+                            <label for="confirm_password">ยืนยันรหัสผ่าน</label>
+                            <input type="password" id="confirm_password" name="confirm_password" required placeholder="พิมพ์รหัสผ่านอีกครั้ง">
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 16px; margin-bottom: 16px;">
+                         <label for="terms" style="display: flex; align-items: center; gap: 8px; font-weight: normal;">
+                            <input type="checkbox" id="terms" name="terms" required style="width: auto; height: auto; margin: 0;">
+                            ข้าพเจ้ายอมรับ <a href="/terms" target="_blank">เงื่อนไขการให้บริการ</a>
+                        </label>
+                    </div>
+
+                    <div class="actions">
+                        <% if (from === 'patients') { %>
+                            <a class="link" href="/patients">← กลับหน้าเวชระเบียน</a>
+                        <% } else { %>
+                            <a class="link" href="/login">กลับไปหน้าล็อกอิน</a>
+                        <% } %>
+                        <button class="primary" type="submit" id="submit-btn" disabled>สร้างบัญชี</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <script nonce="<%= locals.nonce %>">
+        document.addEventListener('DOMContentLoaded', function() {
+            const termsCheckbox = document.getElementById('terms');
+            const submitButton = document.getElementById('submit-btn');
+
+            termsCheckbox.addEventListener('change', function() {
+                submitButton.disabled = !this.checked;
+            });
+        });
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,112 @@
+<%- include('../partials/head', { userRole: userRole }) %>
+<body>
+  <div class="app">
+    <%- include('../partials/navbar', { userRole: userRole }) %>
+
+    <main class="main">
+      <% if (successMessage) { %>
+        <div class="alert alert-success" id="success-alert">
+          <%= successMessage %>
+          <button type="button" class="close" onclick="document.getElementById('success-alert').style.display='none'">&times;</button>
+        </div>
+      <% } %>
+
+      <div class="toolbar">
+        <form class="search" role="search" method="GET" action="/staff/patients">
+          <input type="hidden" name="pageSize" value="<%= pageSize %>"/>
+          <input type="search" name="search" placeholder="ค้นหาผู้ป่วย ชื่อ/นามสกุล/หมายเลขคลินิก" aria-label="Search" value="<%= searchQuery %>" />
+          <button type="submit" style="background:none; border:none; cursor:pointer;">
+            🔎
+          </button>
+        </form>
+        <div class="spacer"></div>
+        
+      </div>
+
+      <section class="card" aria-label="ตารางเวชระเบียน">
+        <!-- หัวตาราง (sticky) -->
+        <header class="table-head">
+          <div>CLINIC NUMBER</div>
+          <div>ชื่อ</div>
+          <div>นามสกุล</div>
+          <div>อายุ</div>
+          <div>เบอร์โทร</div>
+          <div>วันที่เพิ่มข้อมูล</div>
+          <div>แก้ไข</div>
+        </header>
+
+        <!-- บอดี้ที่สกรอลได้ -->
+        <div class="table-body">
+          <% if (!patients.length) { %>
+            <div class="empty">ยังไม่มีข้อมูล</div>
+          <% } %>
+          <% patients.forEach(p => { %>
+            <div class="row">
+              <div><%= p.clinic_number %></div>
+              <div><%= p.first_name %></div>
+              <div><%= p.last_name %></div>
+              <div><%= p.age %></div>
+              <div><%= p.phone %></div>
+              <div><%= p.created_at %></div>
+              <div><a class="chip chip-edit" href="/staff/patients/<%= p.id %>/edit">แก้ไข</a></div>
+            </div>
+          <% }) %>
+        </div>
+      </section>
+
+      <% if (totalPages > 1) { 
+          const windowSize = 7; // จำนวนหมายเลขหน้าที่โชว์
+          const half = Math.floor(windowSize/2);
+          let start = Math.max(1, page - half);
+          let end = Math.min(totalPages, start + windowSize - 1);
+          start = Math.max(1, Math.min(start, end - windowSize + 1));
+      %>
+        <nav class="pager" aria-label="Pagination">
+          <!-- ก่อนหน้า -->
+          <% if (page > 1) { %>
+            <a class="pager-btn" href="?page=<%= page-1 %>&pageSize=<%= pageSize %>&search=<%= encodeURIComponent(searchQuery) %>">ก่อนหน้า</a>
+          <% } else { %>
+            <span class="pager-btn disabled">ก่อนหน้า</span>
+          <% } %>
+
+          <!-- หน้าแรก + ellipsis -->
+          <% if (start > 1) { %>
+            <a class="pager-num" href="?page=1&pageSize=<%= pageSize %>&search=<%= encodeURIComponent(searchQuery) %>">1</a>
+            <% if (start > 2) { %><span class="pager-ellipsis">…</span><% } %>
+          <% } %>
+
+          <!-- กลุ่มหน้าต่าง -->
+          <% for (let i = start; i <= end; i++) { %>
+            <a class="pager-num <%= i === page ? 'active' : '' %>" href="?page=<%= i %>&pageSize=<%= pageSize %>&search=<%= encodeURIComponent(searchQuery) %>"><%= i %></a>
+          <% } %>
+
+          <!-- ellipsis + หน้าสุดท้าย -->
+          <% if (end < totalPages) { %>
+            <% if (end < totalPages-1) { %><span class="pager-ellipsis">…</span><% } %>
+            <a class="pager-num" href="?page=<%= totalPages %>&pageSize=<%= pageSize %>&search=<%= encodeURIComponent(searchQuery) %>"><%= totalPages %></a>
+          <% } %>
+
+          <!-- ถัดไป -->
+          <% if (page < totalPages) { %>
+            <a class="pager-btn" href="?page=<%= page+1 %>&pageSize=<%= pageSize %>&search=<%= encodeURIComponent(searchQuery) %>">ถัดไป</a>
+          <% } else { %>
+            <span class="pager-btn disabled">ถัดไป</span>
+          <% } %>
+        </nav>
+
+        <!-- เปลี่ยนจำนวนแถว/หน้า -->
+        <form class="page-size-form" method="GET" action="/staff/patients">
+          <input type="hidden" name="search" value="<%= searchQuery %>" />
+          <label>แสดงต่อหน้า</label>
+          <select name="pageSize" onchange="this.form.submit()">
+            <% [10,15,20,30,50].forEach(n => { %>
+              <option value="<%= n %>" <%= pageSize===n ? 'selected' : '' %>><%= n %></option>
+            <% }) %>
+          </select>
+          <span class="muted">ทั้งหมด <%= total %> รายการ</span>
+        </form>
+      <% } %>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<aside class="sidebar">
+  <div class="brand">DENTALCARE</div>
+
+  <nav class="nav">
+    <% if (userRole === 'dentist') { %>
+      <h4 class="nav-group-title">Dentist Menu</h4>
+      <ul class="nav-group">
+        <li class="nav-item"><a class="nav-link <%= page === 'patients' ? 'active' : '' %>" href="/dentist/patients">เวชระเบียนผู้ป่วย</a></li>
+      </ul>
+    <% } %>
+
+    <% if (userRole === 'staff') { %>
+      <h4 class="nav-group-title">Staff Menu</h4>
+      <ul class="nav-group">
+        <li class="nav-item"><a class="nav-link <%= page === 'patients' ? 'active' : '' %>" href="/staff/patients">เวชระเบียนผู้ป่วย</a></li>
+        <li class="nav-item"><a class="nav-link <%= page === 'queue' ? 'active' : '' %>" href="/staff/queue">จัดการคิว</a></li>
+        <li class="nav-item"><a class="nav-link <%= page === 'schedules' ? 'active' : '' %>" href="/staff/schedules">จัดการตารางเวลา</a></li>
+        <li class="nav-item"><a class="nav-link <%= page === 'payments' ? 'active' : '' %>" href="/staff/payments">ชำระเงิน</a></li>
+        <li class="nav-item"><a class="nav-link <%= page === 'unit' ? 'active' : '' %>" href="/staff/unit">จัดการยูนิต</a></li>
+      </ul>
+    <% } %>
+
+    <% if (userRole === 'patient') { %>
+      <h4 class="nav-group-title">เมนู</h4>
+      <ul class="nav-group">
+        <li class="nav-item"><a class="nav-link <%= page === 'dashboard' ? 'active' : '' %>" href="/patient/dashboard">แดชบอร์ด</a></li>
+        <li class="nav-item"><a class="nav-link <%= page === 'patient_appointment' ? 'active' : '' %>" href="/patient/patient_appointment">เพิ่มนัดหมาย</a></li>
+        <li class="nav-item"><a class="nav-link <%= page === 'payments' ? 'active' : '' %>" href="/patient/payments">รายการชำระเงิน</a></li>
+        
+      </ul>
+    <% } %>
+  </nav>
+
+  <div class="nav-footer">
+    <a href="/logout"><span>ออกจากระบบ</span></a>
+  </div>
+</aside>

@@ -1,0 +1,264 @@
+/* public/css/record_treatment.css */
+
+/* General Layout & Cards */
+.card {
+    background: var(--card, #fff);
+    border: 1px solid var(--line, #e6eef6);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.card-header {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: var(--ink, #14233b);
+}
+
+/* Patient Info */
+.patient-info-display {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px 24px;
+    font-size: 0.95rem;
+}
+.patient-info-display p {
+    margin: 0;
+}
+.patient-info-display strong {
+    color: var(--muted, #6b7a8a);
+    margin-right: 8px;
+}
+
+/* Form Inputs */
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    color: var(--ink);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="datetime-local"],
+textarea {
+    width: 100%;
+    height: 42px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0 12px;
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+input:focus, textarea:focus {
+    outline: none;
+    border-color: var(--brand, #2f6fb7);
+    box-shadow: 0 0 0 3px rgba(47, 111, 183, 0.15);
+}
+textarea {
+    height: auto;
+    padding: 10px 12px;
+}
+.bp-input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.bp-input-group span {
+    color: var(--muted);
+    font-size: 1.2rem;
+}
+
+
+/* Procedure & Tooth Selection */
+.procedure-quick-select {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.quick-add-proc {
+    background: #f0f5fa;
+    color: #3b5d84;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+.quick-add-proc:hover {
+    background: #e1eaf5;
+    border-color: #b8cde5;
+}
+
+.custom-procedure-adder {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+}
+.custom-procedure-adder input[type="text"] { flex-grow: 1; }
+.custom-procedure-adder input[type="number"] { width: 120px; }
+.custom-procedure-adder .btn { height: 42px; }
+
+.tooth-type-toggle { margin-bottom: 16px; }
+
+.tooth-row {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.tooth {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+    background: var(--card);
+}
+.tooth:hover {
+    border-color: var(--brand);
+    color: var(--brand);
+}
+.tooth.selected {
+    background-color: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
+}
+.child-teeth { display: none; }
+
+
+/* Summary Column */
+.treatment-summary-section .card {
+    position: sticky;
+    top: 24px;
+}
+.treatment-list-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+}
+.treatment-list-table th, .treatment-list-table td {
+    padding: 14px 4px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+}
+.treatment-list-table th {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-weight: 500;
+    padding-bottom: 8px;
+}
+.treatment-list-table tr.active-row {
+    background: #f6f9fc;
+}
+.treatment-list-table input {
+    height: 36px;
+    text-align: right;
+    font-size: 0.95rem;
+}
+.treatment-list-table .description-cell .text-muted { font-size: 0.85rem; }
+.remove-proc-btn {
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.2s;
+    background: none;
+    border: none;
+    font-size: 1rem;
+    padding: 4px;
+}
+.remove-proc-btn:hover {
+    color: #e53935; /* red */
+}
+.cost-summary-table {
+    width: 100%;
+}
+.cost-summary-table td {
+    padding: 10px 0;
+}
+.cost-summary-table .label { color: var(--muted); font-size: 1rem; }
+.cost-summary-table .value { text-align: right; font-weight: 600; font-size: 1.1rem; }
+.cost-summary-table .total-label { font-weight: 600; font-size: 1.2rem; }
+.cost-summary-table .total-value { text-align: right; font-weight: 700; font-size: 1.4rem; color: var(--brand); }
+
+/* Buttons */
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+.btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+}
+.btn-info {
+    background-color: var(--brand);
+    border-color: var(--brand);
+}
+.btn {
+    font-weight: 500;
+}
+
+
+/* File Upload */
+.upload-box {
+    border: 2px dashed var(--line);
+    border-radius: 14px;
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background-color: #fcfdff;
+}
+.upload-box:hover {
+    border-color: var(--brand);
+    background-color: #f6f9fc;
+}
+.upload-box .icon {
+    font-size: 2.5rem;
+    color: var(--brand);
+    margin-bottom: 12px;
+}
+.upload-box p { margin: 0; color: var(--ink); font-weight: 500; }
+.upload-box small { color: var(--muted); }
+#xray-files { display: none; }
+#file-list { margin-top: 16px; text-align: left; }
+.file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f0f5fa;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+    color: var(--ink);
+}
+.file-item span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 8px;
+}
+.file-item button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+}
+.file-item button:hover { color: #e53935; }
