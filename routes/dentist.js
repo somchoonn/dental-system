@@ -5,6 +5,8 @@ const db = require('../db');
 const { allowRoles } = require('../utils/auth');
 const multer = require('multer');
 const path = require('path');
+const fs = require("fs");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
 /* ---------- SLOT มาตรฐาน (แก้ได้ตามจริงของคลินิก) ---------- */
 const SLOT_LABELS = [
@@ -18,11 +20,7 @@ const upload = multer({
 });
 
 const s3 = new S3Client({
-  region: process.env.AWS_REGION || "us-east-1",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
+  region: process.env.AWS_REGION || "us-east-1"
 })
 /* ---------- Helper: หา table ยูนิต ---------- */
 function resolveUnitTable(cb) {
@@ -251,10 +249,9 @@ router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (r
     } = req.body;
 
     const vitals = JSON.stringify({ bp_sys, bp_dia, pulse_rate });
-
-    // ─────────────── UPLOAD FILES TO S3 ───────────────
     const uploadedPaths = [];
 
+    // ─────────────── UPLOAD FILES TO S3 ───────────────
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
         const fileStream = fs.createReadStream(file.path);
@@ -267,15 +264,13 @@ router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (r
           ContentType: file.mimetype,
         };
 
-        // อัปโหลดไป S3
+        console.log("📤 Uploading to S3:", params.Bucket, params.Key);
         await s3.send(new PutObjectCommand(params));
 
-        // URL ของไฟล์ใน S3
         const fileUrl = `https://${params.Bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
         uploadedPaths.push(fileUrl);
 
-        // ลบไฟล์ local
-        fs.unlinkSync(file.path);
+        fs.unlinkSync(file.path); // ลบไฟล์ชั่วคราว
       }
     }
 
@@ -291,7 +286,7 @@ router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (r
       doctor_name,
       vitals,
       clinical_notes,
-      JSON.stringify(uploadedPaths), // เก็บเป็น JSON array ของ S3 URLs
+      JSON.stringify(uploadedPaths),
       procedures,
     ]);
 
@@ -305,8 +300,6 @@ router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (r
     await db.query(qPayment, [visitId, req.user.id, amount || 0]);
 
     console.log("✅ Uploaded X-Ray URLs:", uploadedPaths);
-
-    // ─────────────── REDIRECT ───────────────
     res.redirect(`/dentist/patients/${patient_id}/history?success=1`);
   } catch (err) {
     console.error("❌ Error inserting treatment:", err);
