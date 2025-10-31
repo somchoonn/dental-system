@@ -8,8 +8,9 @@ const db = require("../db");
 const { allowRoles } = require("../utils/auth");
 
 AWS.config.update({ region: "us-east-1" });
-const s3 = new AWS.S3();
-const upload = multer({ dest: "uploads/" });
+
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const s3Client = new S3Client({ region: "us-east-1" });
 
 
 /* ---------- SLOT มาตรฐาน (แก้ได้ตามจริงของคลินิก) ---------- */
@@ -234,11 +235,13 @@ router.get('/new/:patient_id', allowRoles('dentist'), async (req, res, next) => 
 router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (req, res) => {
   try {
     console.log("📦 Files received:", req.files);
+
     const uploadedUrls = [];
 
+    // อัปโหลดแต่ละไฟล์ไป S3
     for (const file of req.files) {
-      const key = `xrays/${Date.now()}-${path.basename(file.originalname)}`;
       const fileStream = fs.createReadStream(file.path);
+      const key = `xrays/${Date.now()}-${path.basename(file.originalname)}`;
 
       const params = {
         Bucket: "dentist-clinic-somchoon-deploy",
@@ -247,65 +250,62 @@ router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (r
         ContentType: file.mimetype,
       };
 
-      console.log("🚀 Uploading to S3:", params.Key);
+      console.log("🚀 Uploading via SDK v3 →", params.Key);
 
-      // ✅ ใช้ callback-based upload (ทำงานได้กับ EC2 role)
-      const result = await new Promise((resolve, reject) => {
-        s3.upload(params, (err, data) => {
-          if (err) {
-            console.error("❌ Upload failed:", err);
-            // ส่ง log กลับให้ frontend ถ้าเป็น 403
-            if (err.statusCode === 403) {
-              return reject({
-                type: "403 Forbidden",
-                message: err.message,
-                code: err.code,
-                region: s3.config.region,
-                bucket: params.Bucket,
-                key: params.Key,
-                stack: err.stack,
-              });
-            }
-            return reject(err);
-          }
-          console.log("✅ Uploaded OK:", data.Location);
-          resolve(data);
-        });
-      });
+      await s3Client.send(new PutObjectCommand(params));
+      uploadedUrls.push(`https://dentist-clinic-somchoon-deploy.s3.amazonaws.com/${key}`);
 
-      uploadedUrls.push(result.Location);
-
-      // ลบไฟล์ local ชั่วคราว
-      try {
-        fs.unlinkSync(file.path);
-      } catch (e) {
-        console.warn("⚠️ Cannot delete temp file:", file.path);
-      }
+      // ลบ temp file
+      fs.unlinkSync(file.path);
     }
 
     console.log("✅ All Uploaded URLs:", uploadedUrls);
 
-    // ─────────────── INSERT visit + payment ได้ตาม logic เดิม ───────────────
-    // ตัวอย่าง:
-    // await db.query(`INSERT INTO visits (...) VALUES (...)`, [...]);
+    // -------- INSERT INTO visits --------
+    const {
+      patient_id,
+      visit_date,
+      doctor_name,
+      bp_sys,
+      bp_dia,
+      pulse_rate,
+      clinical_notes,
+      procedures,
+      amount
+    } = req.body;
 
-    res.redirect(`/dentist/patients/${req.body.patient_id}/history?success=1`);
+    const vitals = JSON.stringify({ bp_sys, bp_dia, pulse_rate });
+    const qVisit = `
+      INSERT INTO visits 
+      (patient_id, visit_date, doctor_name, vital_signs, notes, xray_images_list, procedure_list)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+    const [visitResult] = await db.query(qVisit, [
+      patient_id,
+      visit_date,
+      doctor_name,
+      vitals,
+      clinical_notes,
+      JSON.stringify(uploadedUrls),
+      procedures,
+    ]);
+
+    // -------- INSERT INTO payments --------
+    const qPayment = `
+      INSERT INTO payments (visit_id, staff_id, amount, payment_date, status)
+      VALUES (?, ?, ?, NOW(), 'pending')
+    `;
+    await db.query(qPayment, [visitResult.insertId, req.user.id, amount || 0]);
+
+    console.log("✅ Visit & Payment inserted OK");
+
+    res.redirect(`/dentist/patients/${patient_id}/history?success=1`);
   } catch (err) {
     console.error("💥 Upload error:", err);
-
-    // ถ้า error เป็น object ที่เราสร้างตอนเจอ 403 จะมี type อยู่
-    if (err.type === "403 Forbidden") {
-      return res.status(403).json({
-        error: "403 Forbidden – S3 Permission Denied",
-        details: err,
-      });
+    if (err.name === "AccessDenied" || err.$metadata?.httpStatusCode === 403) {
+      return res.status(403).json({ error: "403 Forbidden – S3 Permission Denied", detail: err });
     }
-
-    res.status(500).json({
-      message: "Upload failed",
-      error: err.message || err,
-      stack: err.stack,
-    });
+    res.status(500).json({ error: "Upload failed", detail: err.message });
   }
 });
 
