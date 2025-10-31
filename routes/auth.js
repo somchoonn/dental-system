@@ -5,9 +5,7 @@ const bcrypt = require('bcrypt');
 const db = require('../db'); // mysql2/promise
 const jwt = require('jsonwebtoken');
 
-// ============================================================================
-// 🧩 Patient Registration
-// ============================================================================
+// Patient Registration
 router.get('/register', (req, res) => {
   res.render('register', {
     title: 'สมัครสมาชิกผู้ป่วย | Dentalcare Clinic',
@@ -77,9 +75,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// ============================================================================
-// 🧩 Dentist Registration
-// ============================================================================
+// Dentist Registration
 router.get('/dentist/register', (req, res) => {
   res.render('dentists/register', { message: null });
 });
@@ -136,9 +132,7 @@ router.post('/dentist/register', async (req, res) => {
   }
 });
 
-// ============================================================================
-// 🧩 Login
-// ============================================================================
+// Login
 router.get('/login', (req, res) => {
   const { success } = req.query;
   let message = null;
@@ -189,9 +183,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ============================================================================
-// 🧩 Logout
-// ============================================================================
+// Logout
 router.get('/logout', (req, res) => {
   res.clearCookie('token');
   res.redirect('/login');

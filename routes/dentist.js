@@ -5,6 +5,43 @@ const db = require('../db');
 const { allowRoles } = require('../utils/auth');
 const multer = require('multer');
 const path = require('path');
+const AWS = require('aws-sdk');
+const multerS3 = require('multer-s3');
+
+require('dotenv').config();
+
+const s3 = new AWS.S3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,       // ดึงจากไฟล์ .env
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION
+});
+const uploader = multer({
+  storage: multerS3({
+    s3: s3,
+    bucket: process.env.AWS_S3_BUCKET,
+    acl: 'public-read', // ใครๆ ก็เปิด URL ได้ (หรือใช้ 'private')
+    contentType: multerS3.AUTO_CONTENT_TYPE, // กำหนด MIME อัตโนมัติ เช่น image/png
+    key: function (req, file, cb) {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const fileName = file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname);
+      cb(null, 'xrays/' + fileName); // เก็บไว้ในโฟลเดอร์ xrays/ ของ bucket
+    }
+  })
+});
+
+router.post('/upload-xray', uploader.single('xray'), async (req, res) => {
+  try {
+    const fileUrl = req.file.location; // URL ของไฟล์ใน S3 เช่น https://bucket.s3.amazonaws.com/xrays/xray-xxx.png
+
+    // บันทึก URL ลงใน database
+    await db.query('UPDATE appointments SET xray_url = ? WHERE id = ?', [fileUrl, req.body.appointment_id]);
+
+    res.json({ success: true, url: fileUrl });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Upload failed' });
+  }
+});
 
 /* ---------- SLOT มาตรฐาน (แก้ได้ตามจริงของคลินิก) ---------- */
 const SLOT_LABELS = [
@@ -236,13 +273,20 @@ router.get('/new/:patient_id', allowRoles('dentist'), async (req, res, next) => 
 
 router.post('/treatment', allowRoles('dentist'), upload.array('xrays'), async (req, res, next) => {
   try {
-    const { 
-      patient_id, visit_date, doctor_name, 
-      bp_sys, bp_dia, pulse_rate, clinical_notes, 
-      procedures, amount 
+    const {
+      patient_id,
+      visit_date,
+      doctor_name,
+      bp_sys,
+      bp_dia,
+      pulse_rate,
+      clinical_notes,
+      procedures,
+      amount,
     } = req.body;
 
-    const xray_images = (req.files || []).map(f => `public/uploads/xrays/${f.filename}`);
+    // ✅ แทนที่จะเก็บ path local → เก็บ URL จาก S3
+    const xray_images = (req.files || []).map(f => f.location); // multer-s3 ให้ property location = URL บน S3
     const vitals = JSON.stringify({ bp_sys, bp_dia, pulse_rate });
 
     // ─────────────── INSERT visit ───────────────
@@ -252,12 +296,12 @@ router.post('/treatment', allowRoles('dentist'), upload.array('xrays'), async (r
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
     const [visitResult] = await db.query(qVisit, [
-      patient_id, 
-      visit_date, 
-      doctor_name, 
-      vitals, 
-      clinical_notes, 
-      JSON.stringify(xray_images), 
+      patient_id,
+      visit_date,
+      doctor_name,
+      vitals,
+      clinical_notes,
+      JSON.stringify(xray_images),
       procedures,
     ]);
 
@@ -272,7 +316,7 @@ router.post('/treatment', allowRoles('dentist'), upload.array('xrays'), async (r
 
     // ─────────────── redirect ───────────────
     res.redirect(`/dentist/patients/${patient_id}/history?success=1`);
-    
+
   } catch (err) {
     console.error('❌ Error inserting treatment:', err);
     next(err);
