@@ -211,7 +211,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const active = it.id === activeRowId ? 'active-row' : '';
         const qtyRO = it.isPerTooth ? 'readonly' : '';
 
-        // === จัดบรรทัดในคอลัมน์ "รายการ" ===
         const descHtml = `<div class="desc"><strong>${it.description}</strong></div>`;
         const teethHtml = (it.tooth_no && it.isPerTooth)
           ? `<div class="tooth-line text-muted small">ซี่: ${it.tooth_no}</div>` : '';
@@ -263,25 +262,43 @@ document.addEventListener('DOMContentLoaded', () => {
     proceduresInput.value = JSON.stringify(payload);
   }
 
-  // file uploads
+  // ✅ แก้ส่วน file uploads
   const dropArea = document.getElementById('file-drop-area');
   const fileInput = document.getElementById('xray-files-input');
   const fileListDisplay = document.getElementById('file-list-display');
 
-  if (dropArea && fileInput){
-    ['dragenter','dragover','dragleave','drop'].forEach(ev => {
+  if (dropArea && fileInput) {
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => {
       dropArea.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }, false);
     });
+
     dropArea.addEventListener('click', () => fileInput.click());
-    dropArea.addEventListener('drop', e => fileInput.files = e.dataTransfer.files, false);
-    fileInput.addEventListener('change', () => {
-      fileListDisplay.innerHTML = '';
-      if (fileInput.files.length){
-        Array.from(fileInput.files).forEach(f => {
-          fileListDisplay.innerHTML += `<div class="file-item"><span>${f.name}</span><small>${(f.size/1024).toFixed(1)} KB</small></div>`;
-        });
+
+    // ✅ ใช้ DataTransfer เพื่อ assign files ได้จริง
+    dropArea.addEventListener('drop', e => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const dt = new DataTransfer();
+      for (const file of e.dataTransfer.files) {
+        dt.items.add(file);
       }
+      fileInput.files = dt.files;
+      showSelectedFiles(fileInput.files);
     });
+
+    fileInput.addEventListener('change', () => showSelectedFiles(fileInput.files));
+
+    function showSelectedFiles(files) {
+      fileListDisplay.innerHTML = '';
+      if (!files.length) return;
+      for (const f of files) {
+        const div = document.createElement('div');
+        div.classList.add('file-item');
+        div.innerHTML = `<span>${f.name}</span><small>${(f.size / 1024).toFixed(1)} KB</small>`;
+        fileListDisplay.appendChild(div);
+      }
+    }
   }
 
   // init
