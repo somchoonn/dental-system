@@ -12,16 +12,18 @@ const SLOT_LABELS = [
   '13:00-14:00', '14:00-15:00', '15:00-16:00', '16:00-17:00', '17:00-18:00'
 ];
 
-/* ---------- Upload X-ray ---------- */
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'public/uploads/xrays/'),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
+const upload = multer({
+  dest: "uploads/", // เก็บไฟล์ชั่วคราวก่อนส่ง S3
+  limits: { fileSize: 10 * 1024 * 1024 }, // จำกัด 10 MB ต่อไฟล์
 });
-const upload = multer({ storage });
 
+const s3 = new S3Client({
+  region: process.env.AWS_REGION || "us-east-1",
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+})
 /* ---------- Helper: หา table ยูนิต ---------- */
 function resolveUnitTable(cb) {
   db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='dental_units';", [], (err, row) => {
@@ -234,47 +236,80 @@ router.get('/new/:patient_id', allowRoles('dentist'), async (req, res, next) => 
 });
 
 
-router.post('/treatment', allowRoles('dentist'), upload.array('xrays'), async (req, res, next) => {
+router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (req, res, next) => {
   try {
-    const { 
-      patient_id, visit_date, doctor_name, 
-      bp_sys, bp_dia, pulse_rate, clinical_notes, 
-      procedures, amount 
+    const {
+      patient_id,
+      visit_date,
+      doctor_name,
+      bp_sys,
+      bp_dia,
+      pulse_rate,
+      clinical_notes,
+      procedures,
+      amount,
     } = req.body;
 
-    const xray_images = (req.files || []).map(f => `public/uploads/xrays/${f.filename}`);
     const vitals = JSON.stringify({ bp_sys, bp_dia, pulse_rate });
 
-    // ─────────────── INSERT visit ───────────────
+    // ─────────────── UPLOAD FILES TO S3 ───────────────
+    const uploadedPaths = [];
+
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const fileStream = fs.createReadStream(file.path);
+        const key = `xrays/${Date.now()}-${path.basename(file.originalname)}`;
+
+        const params = {
+          Bucket: process.env.AWS_S3_BUCKET,
+          Key: key,
+          Body: fileStream,
+          ContentType: file.mimetype,
+        };
+
+        // อัปโหลดไป S3
+        await s3.send(new PutObjectCommand(params));
+
+        // URL ของไฟล์ใน S3
+        const fileUrl = `https://${params.Bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+        uploadedPaths.push(fileUrl);
+
+        // ลบไฟล์ local
+        fs.unlinkSync(file.path);
+      }
+    }
+
+    // ─────────────── INSERT: visits ───────────────
     const qVisit = `
       INSERT INTO visits 
       (patient_id, visit_date, doctor_name, vital_signs, notes, xray_images_list, procedure_list)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
     const [visitResult] = await db.query(qVisit, [
-      patient_id, 
-      visit_date, 
-      doctor_name, 
-      vitals, 
-      clinical_notes, 
-      JSON.stringify(xray_images), 
+      patient_id,
+      visit_date,
+      doctor_name,
+      vitals,
+      clinical_notes,
+      JSON.stringify(uploadedPaths), // เก็บเป็น JSON array ของ S3 URLs
       procedures,
     ]);
 
     const visitId = visitResult.insertId;
 
-    // ─────────────── INSERT payment ───────────────
+    // ─────────────── INSERT: payments ───────────────
     const qPayment = `
       INSERT INTO payments (visit_id, staff_id, amount, payment_date, status)
       VALUES (?, ?, ?, NOW(), 'pending')
     `;
     await db.query(qPayment, [visitId, req.user.id, amount || 0]);
 
-    // ─────────────── redirect ───────────────
+    console.log("✅ Uploaded X-Ray URLs:", uploadedPaths);
+
+    // ─────────────── REDIRECT ───────────────
     res.redirect(`/dentist/patients/${patient_id}/history?success=1`);
-    
   } catch (err) {
-    console.error('❌ Error inserting treatment:', err);
+    console.error("❌ Error inserting treatment:", err);
     next(err);
   }
 });
