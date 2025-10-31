@@ -234,111 +234,47 @@ router.get('/new/:patient_id', allowRoles('dentist'), async (req, res, next) => 
 });
 
 
-router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (req, res, next) => {
-  console.log("🦷 POST /treatment called");
-
+router.post('/treatment', allowRoles('dentist'), upload.array('xrays'), async (req, res, next) => {
   try {
-    // ─────────────── รับค่าจากฟอร์ม ───────────────
-    console.log("📩 Incoming form data:", req.body);
-
-    const {
-      patient_id,
-      visit_date,
-      doctor_name,
-      bp_sys,
-      bp_dia,
-      pulse_rate,
-      clinical_notes,
-      procedures,
-      amount,
+    const { 
+      patient_id, visit_date, doctor_name, 
+      bp_sys, bp_dia, pulse_rate, clinical_notes, 
+      procedures, amount 
     } = req.body;
 
+    const xray_images = (req.files || []).map(f => `public/uploads/xrays/${f.filename}`);
     const vitals = JSON.stringify({ bp_sys, bp_dia, pulse_rate });
 
-    console.log("🧾 Parsed vitals:", vitals);
-    console.log("📸 Received files:", req.files?.length || 0);
-
-    // ─────────────── Upload to S3 ───────────────
-    const uploadedPaths = [];
-
-    if (req.files && req.files.length > 0) {
-      for (const file of req.files) {
-        try {
-          console.log("📤 Preparing upload:", file.originalname);
-
-          const fileStream = fs.createReadStream(file.path);
-          const key = `xrays/${Date.now()}-${path.basename(file.originalname)}`;
-
-          const params = {
-            Bucket: process.env.AWS_S3_BUCKET,
-            Key: key,
-            Body: fileStream,
-            ContentType: file.mimetype,
-          };
-
-          console.log(`🚀 Uploading to S3 → Bucket: ${params.Bucket}, Key: ${params.Key}`);
-
-          await s3.send(new PutObjectCommand(params));
-
-          const fileUrl = `https://${params.Bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-          console.log("✅ Uploaded:", fileUrl);
-
-          uploadedPaths.push(fileUrl);
-
-          // ลบไฟล์ local หลังอัปโหลด
-          fs.unlinkSync(file.path);
-          console.log("🧹 Deleted local file:", file.path);
-        } catch (uploadErr) {
-          console.error("❌ Upload failed:", uploadErr);
-          throw uploadErr;
-        }
-      }
-    } else {
-      console.log("⚠️ No files uploaded.");
-    }
-
-    // ─────────────── Insert Visit ───────────────
-    console.log("💾 Inserting visit record into DB...");
+    // ─────────────── INSERT visit ───────────────
     const qVisit = `
       INSERT INTO visits 
       (patient_id, visit_date, doctor_name, vital_signs, notes, xray_images_list, procedure_list)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
     const [visitResult] = await db.query(qVisit, [
-      patient_id,
-      visit_date,
-      doctor_name,
-      vitals,
-      clinical_notes,
-      JSON.stringify(uploadedPaths),
+      patient_id, 
+      visit_date, 
+      doctor_name, 
+      vitals, 
+      clinical_notes, 
+      JSON.stringify(xray_images), 
       procedures,
     ]);
 
-    console.log("✅ Visit inserted, ID:", visitResult.insertId);
     const visitId = visitResult.insertId;
 
-    // ─────────────── Insert Payment ───────────────
-    console.log("💰 Inserting payment record...");
+    // ─────────────── INSERT payment ───────────────
     const qPayment = `
       INSERT INTO payments (visit_id, staff_id, amount, payment_date, status)
       VALUES (?, ?, ?, NOW(), 'pending')
     `;
     await db.query(qPayment, [visitId, req.user.id, amount || 0]);
-    console.log("✅ Payment record inserted");
 
-    // ─────────────── Summary ───────────────
-    console.log("🎉 Treatment record completed!");
-    console.log("📎 Final uploadedPaths:", uploadedPaths);
-
+    // ─────────────── redirect ───────────────
     res.redirect(`/dentist/patients/${patient_id}/history?success=1`);
+    
   } catch (err) {
-    console.error("🔥 Error inserting treatment:", err);
-
-    // ถ้ามีรายละเอียดจาก AWS SDK
-    if (err.$metadata) {
-      console.error("AWS SDK Metadata:", err.$metadata);
-    }
-
+    console.error('❌ Error inserting treatment:', err);
     next(err);
   }
 });
