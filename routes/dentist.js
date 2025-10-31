@@ -1,23 +1,23 @@
-// routes/dentist.js
-const express = require('express');
+const AWS = require("aws-sdk");
+const fs = require("fs");
+const path = require("path");
+const multer = require("multer");
+const express = require("express");
 const router = express.Router();
-const db = require('../db');
-const { allowRoles } = require('../utils/auth');
-const multer = require('multer');
-const path = require('path');
-const AWS = require('aws-sdk');
-const multerS3 = require('multer-s3');
-require('dotenv').config();
+const db = require("../db");
+const { allowRoles } = require("../utils/auth");
+
+AWS.config.update({ region: "us-east-1" });
+const s3 = new AWS.S3();
+const upload = multer({ dest: "uploads/" });
+
 
 /* ---------- SLOT มาตรฐาน (แก้ได้ตามจริงของคลินิก) ---------- */
 const SLOT_LABELS = [
   '10:00-11:00', '11:00-12:00', '12:00-13:00',
   '13:00-14:00', '14:00-15:00', '15:00-16:00', '16:00-17:00', '17:00-18:00'
 ];
-const fs = require("fs");
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3")
-const upload = multer({ dest: "uploads/" });
-const s3 = new S3Client({ region: "us-east-1" });
+
 
 /* ---------- Helper: หา table ยูนิต ---------- */
 function resolveUnitTable(cb) {
@@ -231,64 +231,80 @@ router.get('/new/:patient_id', allowRoles('dentist'), async (req, res, next) => 
 });
 
 
-router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (req, res, next) => {
+router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (req, res) => {
   try {
     console.log("📦 Files received:", req.files);
     const uploadedUrls = [];
 
     for (const file of req.files) {
-      console.log("🟡 Uploading file:", file.originalname);
-
-      const fileStream = fs.createReadStream(file.path);
       const key = `xrays/${Date.now()}-${path.basename(file.originalname)}`;
-      const uploadParams = {
+      const fileStream = fs.createReadStream(file.path);
+
+      const params = {
         Bucket: "dentist-clinic-somchoon-deploy",
         Key: key,
         Body: fileStream,
         ContentType: file.mimetype,
       };
 
-      try {
-        console.log("🚀 Sending PutObjectCommand:", uploadParams);
-        const result = await s3.send(new PutObjectCommand(uploadParams));
-        console.log("✅ S3 Upload success:", result);
+      console.log("🚀 Uploading to S3:", params.Key);
 
-        uploadedUrls.push(`https://dentist-clinic-somchoon-deploy.s3.amazonaws.com/${key}`);
-      } catch (uploadErr) {
-        console.error("❌ S3 Upload error:", uploadErr);
-        // ตรวจจับเฉพาะ Forbidden (403)
-        if (uploadErr.$metadata && uploadErr.$metadata.httpStatusCode === 403) {
-          return res.status(403).json({
-            error: "403 Forbidden – S3 upload permission denied",
-            details: uploadErr.message,
-            meta: uploadErr.$metadata,
-            file: file.originalname,
-            params: uploadParams,
-          });
-        } else {
-          throw uploadErr; // ส่งต่อให้ catch หลักจัดการ
-        }
-      } finally {
-        // ลบไฟล์ local ทิ้งไม่ว่าจะอัปโหลดสำเร็จหรือไม่
-        try {
-          fs.unlinkSync(file.path);
-        } catch (unlinkErr) {
-          console.warn("⚠️ Failed to delete temp file:", file.path, unlinkErr.message);
-        }
+      // ✅ ใช้ callback-based upload (ทำงานได้กับ EC2 role)
+      const result = await new Promise((resolve, reject) => {
+        s3.upload(params, (err, data) => {
+          if (err) {
+            console.error("❌ Upload failed:", err);
+            // ส่ง log กลับให้ frontend ถ้าเป็น 403
+            if (err.statusCode === 403) {
+              return reject({
+                type: "403 Forbidden",
+                message: err.message,
+                code: err.code,
+                region: s3.config.region,
+                bucket: params.Bucket,
+                key: params.Key,
+                stack: err.stack,
+              });
+            }
+            return reject(err);
+          }
+          console.log("✅ Uploaded OK:", data.Location);
+          resolve(data);
+        });
+      });
+
+      uploadedUrls.push(result.Location);
+
+      // ลบไฟล์ local ชั่วคราว
+      try {
+        fs.unlinkSync(file.path);
+      } catch (e) {
+        console.warn("⚠️ Cannot delete temp file:", file.path);
       }
     }
 
-    console.log("✅ All uploaded URLs:", uploadedUrls);
+    console.log("✅ All Uploaded URLs:", uploadedUrls);
 
-    // ---- (ส่วนบันทึกลง DB เหมือนเดิม) ----
+    // ─────────────── INSERT visit + payment ได้ตาม logic เดิม ───────────────
+    // ตัวอย่าง:
+    // await db.query(`INSERT INTO visits (...) VALUES (...)`, [...]);
+
     res.redirect(`/dentist/patients/${req.body.patient_id}/history?success=1`);
   } catch (err) {
-    console.error("💥 Unexpected error during treatment upload:", err);
+    console.error("💥 Upload error:", err);
+
+    // ถ้า error เป็น object ที่เราสร้างตอนเจอ 403 จะมี type อยู่
+    if (err.type === "403 Forbidden") {
+      return res.status(403).json({
+        error: "403 Forbidden – S3 Permission Denied",
+        details: err,
+      });
+    }
+
     res.status(500).json({
       message: "Upload failed",
-      error: err.message,
+      error: err.message || err,
       stack: err.stack,
-      full: err, // ส่ง log ทั้งก้อนกลับ (ใช้เฉพาะตอน debug)
     });
   }
 });
