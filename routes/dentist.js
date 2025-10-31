@@ -7,11 +7,6 @@ const router = express.Router();
 const db = require("../db");
 const { allowRoles } = require("../utils/auth");
 
-AWS.config.update({ region: "us-east-1" });
-
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
-const s3Client = new S3Client({ region: "us-east-1" });
-
 
 /* ---------- SLOT มาตรฐาน (แก้ได้ตามจริงของคลินิก) ---------- */
 const SLOT_LABELS = [
@@ -235,10 +230,9 @@ router.get('/new/:patient_id', allowRoles('dentist'), async (req, res, next) => 
 router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (req, res) => {
   try {
     console.log("📦 Files received:", req.files);
-
     const uploadedUrls = [];
 
-    // อัปโหลดแต่ละไฟล์ไป S3
+    // ───── Upload แต่ละไฟล์ขึ้น S3 ─────
     for (const file of req.files) {
       const fileStream = fs.createReadStream(file.path);
       const key = `xrays/${Date.now()}-${path.basename(file.originalname)}`;
@@ -250,18 +244,20 @@ router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (r
         ContentType: file.mimetype,
       };
 
-      console.log("🚀 Uploading via SDK v3 →", params.Key);
+      console.log("🚀 Uploading to S3:", key);
 
-      await s3Client.send(new PutObjectCommand(params));
-      uploadedUrls.push(`https://dentist-clinic-somchoon-deploy.s3.amazonaws.com/${key}`);
+      const result = await s3.upload(params).promise();
+      console.log("✅ Uploaded OK:", result.Location);
 
-      // ลบ temp file
+      uploadedUrls.push(result.Location);
+
+      // ลบไฟล์ชั่วคราวหลังอัปโหลด
       fs.unlinkSync(file.path);
     }
 
     console.log("✅ All Uploaded URLs:", uploadedUrls);
 
-    // -------- INSERT INTO visits --------
+    // ───── ดึงข้อมูลจาก form ─────
     const {
       patient_id,
       visit_date,
@@ -271,10 +267,12 @@ router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (r
       pulse_rate,
       clinical_notes,
       procedures,
-      amount
+      amount,
     } = req.body;
 
     const vitals = JSON.stringify({ bp_sys, bp_dia, pulse_rate });
+
+    // ───── INSERT visits ─────
     const qVisit = `
       INSERT INTO visits 
       (patient_id, visit_date, doctor_name, vital_signs, notes, xray_images_list, procedure_list)
@@ -290,7 +288,7 @@ router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (r
       procedures,
     ]);
 
-    // -------- INSERT INTO payments --------
+    // ───── INSERT payments ─────
     const qPayment = `
       INSERT INTO payments (visit_id, staff_id, amount, payment_date, status)
       VALUES (?, ?, ?, NOW(), 'pending')
@@ -298,7 +296,6 @@ router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (r
     await db.query(qPayment, [visitResult.insertId, req.user.id, amount || 0]);
 
     console.log("✅ Visit & Payment inserted OK");
-
     res.redirect(`/dentist/patients/${patient_id}/history?success=1`);
   } catch (err) {
     console.error("💥 Upload error:", err);
@@ -308,6 +305,7 @@ router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (r
     res.status(500).json({ error: "Upload failed", detail: err.message });
   }
 });
+
 
 /* ===============================
  * หน้าเวลาว่าง + เคสวันนี้
