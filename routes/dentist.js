@@ -15,8 +15,8 @@ const SLOT_LABELS = [
 ];
 
 const upload = multer({
-  dest: "uploads/", // เก็บไฟล์ชั่วคราวก่อนส่ง S3
-  limits: { fileSize: 10 * 1024 * 1024 }, // จำกัด 10 MB ต่อไฟล์
+  dest: "uploads/",
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
 const s3 = new S3Client({
@@ -235,7 +235,12 @@ router.get('/new/:patient_id', allowRoles('dentist'), async (req, res, next) => 
 
 
 router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (req, res, next) => {
+  console.log("🦷 POST /treatment called");
+
   try {
+    // ─────────────── รับค่าจากฟอร์ม ───────────────
+    console.log("📩 Incoming form data:", req.body);
+
     const {
       patient_id,
       visit_date,
@@ -249,32 +254,51 @@ router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (r
     } = req.body;
 
     const vitals = JSON.stringify({ bp_sys, bp_dia, pulse_rate });
+
+    console.log("🧾 Parsed vitals:", vitals);
+    console.log("📸 Received files:", req.files?.length || 0);
+
+    // ─────────────── Upload to S3 ───────────────
     const uploadedPaths = [];
 
-    // ─────────────── UPLOAD FILES TO S3 ───────────────
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        const fileStream = fs.createReadStream(file.path);
-        const key = `xrays/${Date.now()}-${path.basename(file.originalname)}`;
+        try {
+          console.log("📤 Preparing upload:", file.originalname);
 
-        const params = {
-          Bucket: process.env.AWS_S3_BUCKET,
-          Key: key,
-          Body: fileStream,
-          ContentType: file.mimetype,
-        };
+          const fileStream = fs.createReadStream(file.path);
+          const key = `xrays/${Date.now()}-${path.basename(file.originalname)}`;
 
-        console.log("📤 Uploading to S3:", params.Bucket, params.Key);
-        await s3.send(new PutObjectCommand(params));
+          const params = {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Key: key,
+            Body: fileStream,
+            ContentType: file.mimetype,
+          };
 
-        const fileUrl = `https://${params.Bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-        uploadedPaths.push(fileUrl);
+          console.log(`🚀 Uploading to S3 → Bucket: ${params.Bucket}, Key: ${params.Key}`);
 
-        fs.unlinkSync(file.path); // ลบไฟล์ชั่วคราว
+          await s3.send(new PutObjectCommand(params));
+
+          const fileUrl = `https://${params.Bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+          console.log("✅ Uploaded:", fileUrl);
+
+          uploadedPaths.push(fileUrl);
+
+          // ลบไฟล์ local หลังอัปโหลด
+          fs.unlinkSync(file.path);
+          console.log("🧹 Deleted local file:", file.path);
+        } catch (uploadErr) {
+          console.error("❌ Upload failed:", uploadErr);
+          throw uploadErr;
+        }
       }
+    } else {
+      console.log("⚠️ No files uploaded.");
     }
 
-    // ─────────────── INSERT: visits ───────────────
+    // ─────────────── Insert Visit ───────────────
+    console.log("💾 Inserting visit record into DB...");
     const qVisit = `
       INSERT INTO visits 
       (patient_id, visit_date, doctor_name, vital_signs, notes, xray_images_list, procedure_list)
@@ -290,19 +314,31 @@ router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (r
       procedures,
     ]);
 
+    console.log("✅ Visit inserted, ID:", visitResult.insertId);
     const visitId = visitResult.insertId;
 
-    // ─────────────── INSERT: payments ───────────────
+    // ─────────────── Insert Payment ───────────────
+    console.log("💰 Inserting payment record...");
     const qPayment = `
       INSERT INTO payments (visit_id, staff_id, amount, payment_date, status)
       VALUES (?, ?, ?, NOW(), 'pending')
     `;
     await db.query(qPayment, [visitId, req.user.id, amount || 0]);
+    console.log("✅ Payment record inserted");
 
-    console.log("✅ Uploaded X-Ray URLs:", uploadedPaths);
+    // ─────────────── Summary ───────────────
+    console.log("🎉 Treatment record completed!");
+    console.log("📎 Final uploadedPaths:", uploadedPaths);
+
     res.redirect(`/dentist/patients/${patient_id}/history?success=1`);
   } catch (err) {
-    console.error("❌ Error inserting treatment:", err);
+    console.error("🔥 Error inserting treatment:", err);
+
+    // ถ้ามีรายละเอียดจาก AWS SDK
+    if (err.$metadata) {
+      console.error("AWS SDK Metadata:", err.$metadata);
+    }
+
     next(err);
   }
 });
