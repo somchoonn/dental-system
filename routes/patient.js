@@ -61,9 +61,7 @@ router.get('/dashboard', allowRoles('patient'), async (req, res, next) => {
   }
 }
 
-    // ─────────────────────────────
-    // 1) หานัดจริงใน appointments
-    // ─────────────────────────────
+
     const apptSql = `
       SELECT 
         a.id,
@@ -86,9 +84,6 @@ router.get('/dashboard', allowRoles('patient'), async (req, res, next) => {
     const [apptRows] = await db.query(apptSql, [patientId]);
     let appointmentOrRequest = apptRows.length > 0 ? apptRows[0] : null;
 
-    // ─────────────────────────────
-    // 2) ถ้าไม่มีนัดจริง ให้ดูคำขออนาคต (appointment_requests)
-    // ─────────────────────────────
     if (!appointmentOrRequest) {
       const reqSql = `
         SELECT id, requested_date, requested_time_slot, treatment, notes, status
@@ -112,7 +107,6 @@ router.get('/dashboard', allowRoles('patient'), async (req, res, next) => {
           endTime = parts[1]?.trim() || '00:00';
         }
 
-        // ✅ ใช้ formatDate เพื่อป้องกัน Invalid Date
         const start = formatDate(reqRow.requested_date, startTime);
         const end = formatDate(reqRow.requested_date, endTime);
 
@@ -127,13 +121,11 @@ router.get('/dashboard', allowRoles('patient'), async (req, res, next) => {
           is_request: 1
         };
 
-        console.log('📅 appointmentOrRequest:', appointmentOrRequest);
+        console.log('appointmentOrRequest:', appointmentOrRequest);
       }
     }
 
-    // ─────────────────────────────
-    // 3) ยอดค้างชำระล่าสุด (ตรวจว่ามี column status หรือไม่)
-    // ─────────────────────────────
+
     let payment = null;
     try {
       const [cols] = await db.query(`SHOW COLUMNS FROM payments LIKE 'status';`);
@@ -164,9 +156,7 @@ router.get('/dashboard', allowRoles('patient'), async (req, res, next) => {
       console.warn('⚠️ Error checking payments:', err.message);
     }
 
-    // ─────────────────────────────
-    // 4) Render EJS Template
-    // ─────────────────────────────
+
     res.render('patient/dashboard', {
       user: req.user,
       userRole: req.user.role,
@@ -183,8 +173,7 @@ router.get('/dashboard', allowRoles('patient'), async (req, res, next) => {
 
 
 
-/* =================== Payments list + Date filter =================== */
-// routes/patient.js (ต่อจาก dashboard)
+
 async function hasColumn(tableName, columnName) {
   try {
     const [result] = await db.query(
@@ -235,7 +224,6 @@ router.get('/payments', allowRoles('patient'), async (req, res, next) => {
       ORDER BY COALESCE(p.payment_date, '0001-01-01') DESC, p.id DESC;
     `;
 
-    // ใช้ db.query() แทน db.all()
     const [rows] = await db.query(sql, params);
 
     res.render('patient/payments', {
@@ -254,7 +242,6 @@ router.get('/payments', allowRoles('patient'), async (req, res, next) => {
 });
 
 
-/* =================== ชำระเงิน (เปลี่ยนสถานะ) =================== */
 async function hasColumn(tableName, columnName) {
   try {
     const [result] = await db.query(
@@ -407,7 +394,7 @@ router.post('/appointment-request', allowRoles('patient'), async (req, res, next
       });
     }
 
-    // ✅ Query MySQL ใช้ async/await
+    //  Query MySQL ใช้ async/await
     const sql = `
       INSERT INTO appointment_requests (
         patient_id, requested_date, requested_time_slot, treatment, notes, status
@@ -444,9 +431,7 @@ router.get('/dashboard-stats', allowRoles('patient'), async (req, res) => {
       });
     }
 
-    // ─────────────────────────────
-    // 1) นัดหมายทั้งหมด
-    // ─────────────────────────────
+
     const totalAppointmentsSql = `
       SELECT COUNT(*) AS count
       FROM appointments
@@ -455,9 +440,7 @@ router.get('/dashboard-stats', allowRoles('patient'), async (req, res) => {
     const [totalRows] = await db.query(totalAppointmentsSql, [patientId]);
     const totalAppointments = totalRows[0]?.count || 0;
 
-    // ─────────────────────────────
-    // 2) นัดหมายที่เสร็จสิ้น
-    // ─────────────────────────────
+
     const completedAppointmentsSql = `
       SELECT COUNT(*) AS count
       FROM appointments
@@ -466,16 +449,12 @@ router.get('/dashboard-stats', allowRoles('patient'), async (req, res) => {
     const [completedRows] = await db.query(completedAppointmentsSql, [patientId]);
     const completedAppointments = completedRows[0]?.count || 0;
 
-    // ─────────────────────────────
-    // 3) ค้างชำระ (ตรวจว่ามี column 'status' ไหม)
-    // ─────────────────────────────
     let pendingPayments = 0;
     const [statusColumn] = await db.query(
       "SHOW COLUMNS FROM payments LIKE 'status';"
     );
 
     if (statusColumn.length > 0) {
-      // ถ้ามีคอลัมน์ status
       const pendingPaymentsSql = `
         SELECT COUNT(*) AS count
         FROM payments p
@@ -485,7 +464,6 @@ router.get('/dashboard-stats', allowRoles('patient'), async (req, res) => {
       const [pendingRows] = await db.query(pendingPaymentsSql, [patientId]);
       pendingPayments = pendingRows[0]?.count || 0;
     } else {
-      // ถ้าไม่มี status column
       const pendingPaymentsSql = `
         SELECT COUNT(*) AS count
         FROM payments p
@@ -495,10 +473,6 @@ router.get('/dashboard-stats', allowRoles('patient'), async (req, res) => {
       const [pendingRows] = await db.query(pendingPaymentsSql, [patientId]);
       pendingPayments = pendingRows[0]?.count || 0;
     }
-
-    // ─────────────────────────────
-    // 4) ส่งผลลัพธ์กลับ
-    // ─────────────────────────────
     res.json({
       success: true,
       totalAppointments,
@@ -517,13 +491,10 @@ router.get('/dashboard-stats', allowRoles('patient'), async (req, res) => {
 
 
 
-// เพิ่ม route สำหรับยกเลิกคำขอนัดหมาย
 router.post('/appointment-requests/:id/cancel', allowRoles('patient'), async (req, res) => {
   try {
     const requestId = req.params.id;
     const patientId = req.user.patient_id;
-
-    // ตรวจสอบว่าคำขออยู่ในระบบและเป็นของผู้ป่วยคนนี้
     const checkSql = `
       SELECT id, status 
       FROM appointment_requests 
@@ -537,7 +508,6 @@ router.post('/appointment-requests/:id/cancel', allowRoles('patient'), async (re
 
     const request = rows[0];
 
-    // ตรวจสอบสถานะว่าสามารถยกเลิกได้ไหม
     if (request.status !== 'NEW' && request.status !== 'PENDING') {
       return res.status(400).json({
         success: false,
@@ -545,7 +515,6 @@ router.post('/appointment-requests/:id/cancel', allowRoles('patient'), async (re
       });
     }
 
-    // อัปเดตสถานะเป็น CANCELLED
     const updateSql = `
       UPDATE appointment_requests 
       SET status = 'CANCELLED' 
@@ -565,7 +534,6 @@ router.post('/appointment-requests/:id/cancel', allowRoles('patient'), async (re
 });
 
 
-/* =================== ประวัติคำขอนัด =================== */
 router.get('/appointment-history', allowRoles('patient'), async (req, res) => {
   try {
     const patientId = req.user.patient_id;
@@ -592,10 +560,9 @@ router.get('/appointment-history', allowRoles('patient'), async (req, res) => {
       params.push(limit);
     }
 
-    // ✅ ใช้ db.query() แทน db.all()
     const [requests] = await db.query(sql, params);
 
-    // ถ้ามี ?limit= แปลว่าต้องการ JSON (ใช้ใน Dashboard AJAX)
+  
     if (limit) {
       return res.json({
         success: true,
@@ -603,7 +570,7 @@ router.get('/appointment-history', allowRoles('patient'), async (req, res) => {
       });
     }
 
-    // ถ้าไม่มี ?limit= แปลว่าเข้าหน้าประวัติผ่าน browser
+
     res.render('patient/appointment_history', {
       user: req.user,
       userRole: req.user.role,
@@ -614,21 +581,17 @@ router.get('/appointment-history', allowRoles('patient'), async (req, res) => {
   } catch (err) {
     console.error('Error fetching appointment history:', err.message);
 
-    // ถ้ามี ?limit= อยู่ ให้ตอบ JSON error
     if (req.query.limit) {
       return res.status(500).json({
         success: false,
         error: 'เกิดข้อผิดพลาดในการโหลดข้อมูล'
       });
     }
-
-    // ถ้าเข้าจากหน้าเว็บโดยตรง
     res.status(500).send('เกิดข้อผิดพลาดในการโหลดข้อมูล');
   }
 });
 
 
-/* =================== เลื่อนนัด (ยกเลิกเดิม + สร้างคำขอใหม่) =================== */
 router.post('/appointments/:id/reschedule', allowRoles('patient'), async (req, res) => {
   try {
     const apptId = req.params.id;
@@ -642,9 +605,6 @@ router.post('/appointments/:id/reschedule', allowRoles('patient'), async (req, r
       });
     }
 
-    // ─────────────────────────────
-    // 1) ตรวจสอบนัดปัจจุบัน
-    // ─────────────────────────────
     const checkSql = `
       SELECT 
         a.id, a.patient_id, a.status, a.start_time, a.notes,
@@ -680,15 +640,10 @@ router.post('/appointments/:id/reschedule', allowRoles('patient'), async (req, r
       });
     }
 
-    // ─────────────────────────────
-    // 2) ยกเลิกนัดเดิม
-    // ─────────────────────────────
+
     const cancelSql = `UPDATE appointments SET status = 'cancelled' WHERE id = ?`;
     await db.query(cancelSql, [apptId]);
 
-    // ─────────────────────────────
-    // 3) เปิดคำขอใหม่ (appointment_requests)
-    // ─────────────────────────────
     const reqSql = `
       INSERT INTO appointment_requests (
         patient_id, requested_date, requested_time_slot, treatment, notes, status
@@ -711,9 +666,7 @@ router.post('/appointments/:id/reschedule', allowRoles('patient'), async (req, r
       noteAll || null
     ]);
 
-    // ─────────────────────────────
-    // 4) ส่งผลลัพธ์กลับ
-    // ─────────────────────────────
+
     res.json({
       success: true,
       message: 'เลื่อนนัดสำเร็จ เปิดคำขอใหม่แล้ว',

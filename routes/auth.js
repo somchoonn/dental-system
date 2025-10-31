@@ -48,7 +48,7 @@ router.post('/register', async (req, res) => {
 
     // สร้าง user ใหม่
     const [userResult] = await db.query(
-      `INSERT INTO users (citizen_id, password, role, username) VALUES (?, ?, 'patient')`,
+      `INSERT INTO users (citizen_id, password, role) VALUES (?, ?, 'patient')`,
       [citizen_id, hashedPassword]
     );
     const userId = userResult.insertId;

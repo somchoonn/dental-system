@@ -16,10 +16,10 @@ const pool = mysql.createPool({
 (async () => {
   try {
     const conn = await pool.getConnection();
-    console.log('✅ Connected to MySQL RDS');
+    console.log('Connected to MySQL RDS');
     conn.release();
   } catch (err) {
-    console.error('❌ Database connection failed:', err.message);
+    console.error('Database connection failed:', err.message);
   }
 })();
 
