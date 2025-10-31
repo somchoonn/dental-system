@@ -16,27 +16,31 @@ const SLOT_LABELS = [
   '13:00-14:00', '14:00-15:00', '15:00-16:00', '16:00-17:00', '17:00-18:00'
 ];
 
-// ─────────────── AWS S3 CONFIG ───────────────
-const s3 = new AWS.S3({
-  region: process.env.AWS_REGION || "us-east-1",
-});
+// ────────────────────────────────
+// 🧩 ตั้งค่า AWS SDK (ใช้ role ของ EC2 ได้เลย ไม่ต้องใส่ key)
+// ────────────────────────────────
+AWS.config.update({ region: "us-east-1" }); // ✅ ต้องตรงกับ region ของ bucket
+const s3 = new AWS.S3();
 
-// ─────────────── Multer + S3 ───────────────
-const uploader = multer({
+// ────────────────────────────────
+// 🪣 ตั้งค่า multer-s3 storage
+// ────────────────────────────────
+const upload = multer({
   storage: multerS3({
     s3: s3,
-    bucket: process.env.AWS_S3_BUCKET,
-    acl: "public-read", // หรือ "private" ถ้าไม่อยากให้เข้าผ่าน URL ตรงได้
+    bucket: "dentist-clinic-somchoon-deploy", // ✅ ใส่ชื่อ bucket จริงของคุณ
+    acl: "public-read",
     contentType: multerS3.AUTO_CONTENT_TYPE,
     key: function (req, file, cb) {
       const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      const fileName = `xrays/${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`;
-      console.log("🪣 Uploading to S3 Key:", fileName);
+      const fileName = `xrays/${uniqueSuffix}${path.extname(file.originalname)}`;
+      console.log("🪣 Uploading file to:", fileName);
       cb(null, fileName);
     },
   }),
-  limits: { fileSize: 10 * 1024 * 1024 }, // จำกัด 10MB ต่อไฟล์
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
 });
+
 
 
 /* ---------- Helper: หา table ยูนิต ---------- */
@@ -251,11 +255,10 @@ router.get('/new/:patient_id', allowRoles('dentist'), async (req, res, next) => 
 });
 
 
-router.post("/treatment", allowRoles("dentist"), uploader.array("xrays"), async (req, res, next) => {
+router.post("/treatment", allowRoles("dentist"), upload.array("xrays"), async (req, res, next) => {
   try {
-    console.log("🦷 Receiving treatment form...");
-    console.log("➡️ Files:", req.files);
-    console.log("➡️ Body:", req.body);
+    console.log("📦 Body received:", req.body);
+    console.log("📸 Files received:", req.files);
 
     const {
       patient_id,
@@ -269,26 +272,22 @@ router.post("/treatment", allowRoles("dentist"), uploader.array("xrays"), async 
       amount,
     } = req.body;
 
-    // vital signs → JSON string
-    const vitals = JSON.stringify({
-      bp_sys: parseInt(bp_sys || 0),
-      bp_dia: parseInt(bp_dia || 0),
-      pulse_rate: parseInt(pulse_rate || 0),
-    });
+    // ✅ ทำให้แน่ใจว่าค่าที่รับมาเป็น string/json ที่อ่านได้
+    const vitals = JSON.stringify({ bp_sys, bp_dia, pulse_rate });
 
-    // สร้าง array ของ S3 URLs
-    const xray_images = (req.files || [])
-      .map((f) => f.location || null)
-      .filter(Boolean);
+    // ✅ ถ้ามีรูป: ดึง URL จาก S3
+    const xray_images = (req.files || []).map((f) => f.location);
+    console.log("🖼️ Uploaded URLs:", xray_images);
 
-    console.log("✅ X-Ray URLs:", xray_images);
-
-    // ─────────────── INSERT visits ───────────────
+    // ────────────────────────────────
+    // 💾 Insert into visits
+    // ────────────────────────────────
     const qVisit = `
       INSERT INTO visits 
       (patient_id, visit_date, doctor_name, vital_signs, notes, xray_images_list, procedure_list)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
+
     const [visitResult] = await db.query(qVisit, [
       patient_id,
       visit_date,
@@ -300,22 +299,23 @@ router.post("/treatment", allowRoles("dentist"), uploader.array("xrays"), async 
     ]);
 
     const visitId = visitResult.insertId;
-    console.log("🆗 Visit inserted, id =", visitId);
+    console.log("✅ Visit created:", visitId);
 
-    // ─────────────── INSERT payments ───────────────
+    // ────────────────────────────────
+    // 💳 Insert into payments
+    // ────────────────────────────────
     const qPayment = `
       INSERT INTO payments (visit_id, staff_id, amount, payment_date, status)
       VALUES (?, ?, ?, NOW(), 'pending')
     `;
     await db.query(qPayment, [visitId, req.user.id, amount || 0]);
 
-    console.log("💰 Payment inserted successfully.");
-
-    // ─────────────── REDIRECT ───────────────
+    console.log("✅ Payment entry added");
     res.redirect(`/dentist/patients/${patient_id}/history?success=1`);
+
   } catch (err) {
-    console.error("❌ Error inserting treatment:", err);
-    next(err);
+    console.error("❌ Error during treatment upload:", err);
+    res.status(500).send("Internal Server Error");
   }
 });
 
